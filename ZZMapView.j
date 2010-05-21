@@ -1,7 +1,7 @@
 // ZZMapView.j
 //
 // Created by Stephen Ierodiaconou,
-// Copyright (c) 2010, Architecture 00 Ltd. 
+// Copyright (c) 2010, Architecture 00 Ltd.
 // Portions Francisco Tolmasky, Copyright (c) 2010 280 North, Inc.
 //
 // Permission is hereby granted, free of charge, to any person
@@ -28,7 +28,7 @@
 @import <Foundation/CPObject.j>
 @import <AppKit/CPView.j>
 
-var ZZMapTypeHybrid = 'hybrid',
+    ZZMapTypeHybrid = 'hybrid',
     ZZMapTypeRoadMap = 'roadmap',
     ZZMapTypeSatellite = 'satellite',
     ZZMapTypeTerrain = 'terrain';
@@ -44,7 +44,7 @@ var ZZMapTypeHybrid = 'hybrid',
 
     DOMElement              DOMMapElement;
     Object                  map                 @accessors;
-    
+
     MapPoint                centerPoint         @accessors;
     float                   zoomLevel           @accessors;
     MapTypeId               mapType;            @accessors;
@@ -63,7 +63,7 @@ var ZZMapTypeHybrid = 'hybrid',
         centerPoint = center;
         zoomLevel = zoom;
         mapType = type;
-        
+
         [self _buildDOM];
     }
     return self;
@@ -96,7 +96,7 @@ var ZZMapTypeHybrid = 'hybrid',
         document.body.appendChild(DOMMapElement);
 
         map = new google.maps.Map(DOMMapElement);
-        
+
         switch (mapType)
         {
         case ZZMapTypeHybrid:
@@ -114,13 +114,13 @@ var ZZMapTypeHybrid = 'hybrid',
         default:
             map.setMapTypeId(google.maps.MapTypeId.HYBRID);
         }
-        
+
         map.setCenter(new google.maps.LatLng(centerPoint.latitude, centerPoint.longitude));
         map.setZoom(zoomLevel);
-        
+
         style.left = "0px";
         style.top = "0px";
-        
+
         google.maps.event.trigger(map, 'resize');
 
         // Important: we had to remove this dom element before appending it somewhere else
@@ -128,9 +128,9 @@ var ZZMapTypeHybrid = 'hybrid',
         document.body.removeChild(DOMMapElement);
 
         _DOMElement.appendChild(DOMMapElement);
-        
+
         [self mapIsReady];
-        
+
     });
 }
 
@@ -154,7 +154,7 @@ var ZZMapTypeHybrid = 'hybrid',
 - (void)mapIsReady
 {
     console.log('the map is ready');
-    
+
     if (delegate)
         [delegate mapIsReady:self];
 }
@@ -180,7 +180,7 @@ var performWhenGoogleMapsScriptLoaded = function(/*Function*/ aFunction)
     else
     {
         var DOMScriptElement = document.createElement("script");
-        
+
         DOMScriptElement.src = "http://maps.google.com/maps/api/js?sensor=false&callback=_MKMapViewMapsLoaded";
         DOMScriptElement.type = "text/javascript";
 
@@ -225,6 +225,58 @@ function _MKMapViewMapsLoaded()
 {
     [super encodeWithCoder:aCoder];
 
+}
+
+@end
+
+
+// Map Marker icon
+@implementation ZZMarkerImage : CPObject
+{
+    MarkerImage     markerImage;
+    MarkerImage     markerShadow;
+}
+
+@end
+
+// Map Marker
+@implementation ZZMarker : CPObject
+{
+    Map             map;
+
+    Marker          marker      @accessors(readonly);
+    ZZMarkerImage   image       @accessors;
+
+    MarkerOptions   markerOptions;
+}
+
+- (id)initAtLocation:loc onMap:vMap
+{
+    if (self = [super init])
+    {
+        map = [vMap map];
+        latlng = new google.maps.LatLng(loc.latitude, loc.longitude);
+        markerOptions = {
+            position:latlng,
+            map:map
+        };
+        marker = new google.maps.Marker( markerOptions );
+    }
+    return self;
+}
+
+- (void)setVisible:vis
+{
+    if (vis)
+        marker.setMap(map);
+    else
+        marker.setMap(null);
+}
+
+- (void)remove
+{
+    marker.setMap(null);
+    marker = null;
 }
 
 @end
