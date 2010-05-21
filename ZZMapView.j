@@ -28,10 +28,10 @@
 @import <Foundation/CPObject.j>
 @import <AppKit/CPView.j>
 
-    ZZMapTypeHybrid = 'hybrid',
-    ZZMapTypeRoadMap = 'roadmap',
-    ZZMapTypeSatellite = 'satellite',
-    ZZMapTypeTerrain = 'terrain';
+ZZMapTypeHybrid     = 0,
+ZZMapTypeRoadMap    = 1,
+ZZMapTypeSatellite  = 2,
+ZZMapTypeTerrain    = 3;
 
 /*
     MapPoint:
@@ -45,25 +45,53 @@
     DOMElement              DOMMapElement;
     Object                  map                 @accessors;
 
+    MapOptions              mapOptions;
+
     MapPoint                centerPoint         @accessors;
-    float                   zoomLevel           @accessors;
-    MapTypeId               mapType;            @accessors;
 }
 
-- (id)initWithFrame:(CGRect)frame
+- (id)initWithFrame:(CGRect)frame, ...
 {
-    [self initWithFrame:frame delegate:self center:{latitude:51.565828,longitude:-0.100034} zoom:15 mapType:ZZMapTypeHybrid];
+    if (self = [super initWithFrame:frame])
+    {
+        delegate = self;
+        centerPoint = {latitude:51.565828,longitude:-0.100034};
+        mapOptions = {};
+        mapOptions.zoom = 15;
+
+        var argLength = arguments.length,
+            i = 3;
+        for (; i < argLength && ((argument = arguments[i]) !== nil); ++i)
+        {
+            for (property in argument)
+            {
+                mapOptions[''+property] = argument[''+property];
+            }
+        }
+        [self _buildDOM];
+    }
+    return self;
 }
 
-- (id)initWithFrame:(CGRect)frame delegate:(id)d center:(MapPoint)center zoom:(float)zoom mapType:type
+- (id)initWithFrame:(CGRect)frame delegate:(id)d center:(MapPoint)center zoom:(float)zoom, ...
 {
     if (self = [super initWithFrame:frame])
     {
         delegate = d;
         centerPoint = center;
-        zoomLevel = zoom;
-        mapType = type;
 
+        mapOptions = {};
+        mapOptions.zoom = zoom;
+
+        var argLength = arguments.length,
+            i = 5;
+        for (; i < argLength && ((argument = arguments[i]) !== nil); ++i)
+        {
+            for (property in argument)
+            {
+                mapOptions[''+property] = argument[''+property];
+            }
+        }
         [self _buildDOM];
     }
     return self;
@@ -95,28 +123,34 @@
         // so we have to temporarily place it somewhere on the screen to appropriately size it.
         document.body.appendChild(DOMMapElement);
 
-        map = new google.maps.Map(DOMMapElement);
-
-        switch (mapType)
+        if (mapOptions && (mapOptions.mapTypeId !== undefined))
         {
-        case ZZMapTypeHybrid:
-            map.setMapTypeId(google.maps.MapTypeId.HYBRID);
-            break;
-        case ZZMapTypeRoadMap:
-            map.setMapTypeId(google.maps.MapTypeId.ROADMAP);
-            break;
-        case ZZMapTypeSatellite:
-            map.setMapTypeId(google.maps.MapTypeId.SATELLITE);
-            break;
-        case ZZMapTypeTerrain:
-            map.setMapTypeId(google.maps.MapTypeId.TERRAIN);
-            break;
-        default:
-            map.setMapTypeId(google.maps.MapTypeId.HYBRID);
+            switch (mapOptions.mapTypeId)
+            {
+                case ZZMapTypeHybrid:
+                    mapOptions.mapTypeId = google.maps.MapTypeId.HYBRID;
+                    break;
+                case ZZMapTypeRoadMap:
+                    mapOptions.mapTypeId = google.maps.MapTypeId.ROADMAP;
+                    break;
+                case ZZMapTypeSatellite:
+                    mapOptions.mapTypeId = google.maps.MapTypeId.SATELLITE;
+                    break;
+                case ZZMapTypeTerrain:
+                    mapOptions.mapTypeId = google.maps.MapTypeId.TERRAIN;
+                    break;
+                default:
+                    mapOptions.mapTypeId = google.maps.MapTypeId.HYBRID;
+            }
         }
+        else
+            mapOptions.mapTypeId = google.maps.MapTypeId.HYBRID;
 
-        map.setCenter(new google.maps.LatLng(centerPoint.latitude, centerPoint.longitude));
-        map.setZoom(zoomLevel);
+        mapOptions.center = new google.maps.LatLng(centerPoint.latitude, centerPoint.longitude);
+
+        map = new google.maps.Map(DOMMapElement, mapOptions);
+
+        //map.setCenter(new google.maps.LatLng(centerPoint.latitude, centerPoint.longitude));
 
         style.left = "0px";
         style.top = "0px";
@@ -233,8 +267,9 @@ function _MKMapViewMapsLoaded()
 // Map Marker icon
 @implementation ZZMarkerImage : CPObject
 {
-    MarkerImage     markerImage;
-    MarkerImage     markerShadow;
+    MarkerImage     image    @accessors;
+    MarkerImage     shadow  @accessors;
+    JSObject        shape   @accessors;
 }
 
 @end
@@ -242,27 +277,50 @@ function _MKMapViewMapsLoaded()
 // Map Marker
 @implementation ZZMarker : CPObject
 {
-    Map             map;
-
     Marker          marker      @accessors(readonly);
-    ZZMarkerImage   image       @accessors;
+    ZZMarkerImage   icon        @accessors;
 
     MarkerOptions   markerOptions;
+    InfoWindow      infoWindow;
 }
 
-- (id)initAtLocation:loc onMap:vMap
+- (id)initAtLocation:loc onMap:vMap, ...
 {
     if (self = [super init])
     {
-        map = [vMap map];
-        latlng = new google.maps.LatLng(loc.latitude, loc.longitude);
-        markerOptions = {
-            position:latlng,
-            map:map
-        };
+        markerOptions = {};
+        markerOptions.map = [vMap map];
+        markerOptions.position = new google.maps.LatLng(loc.latitude, loc.longitude);
+        var argLength = arguments.length,
+            i = 4;
+        for (; i < argLength && ((argument = arguments[i]) !== nil); ++i)
+        {
+            for (property in argument)
+            {
+                markerOptions[''+property] = argument[''+property];
+            }
+        }
+
+        if (icon)
+        {
+            markerOptions.icon = [icon image];
+            markerOptions.shadow = [icon shadow];
+            markerOptions.shape = [icon shape];
+        }
         marker = new google.maps.Marker( markerOptions );
     }
     return self;
+}
+
+- (void)setInfoWindowContent:(CPString)html
+{
+    infoWindow = new google.maps.InfoWindow({
+        content: html
+    });
+
+    google.maps.event.addListener(marker, 'click', function() {
+        infoWindow.open(marker.getMap(),marker);
+    });
 }
 
 - (void)setVisible:vis

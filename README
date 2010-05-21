@@ -1,6 +1,38 @@
-This is a very simple Google Maps v3 wrapper for Cappuccino (http://www.cappuccino.org).
+This is a very simple Google Maps v3 wrapper for Cappuccino (http://www.cappuccino.org)
+-----------------------------------------------------------
 
-It is a CPView subclass. 
+It is a CPView subclass. Some code comes from http://github.com/280north/mapkit
 
-Some code comes from http://github.com/280north/mapkit
- 
+The initWithFrame: methods take a variable number of trailing arguments.
+The idea is rather than creating loads of wrapper methods around all
+the map options, we simply pass each option as an object or a number of options in one object to
+the method, as below:
+
+See http://code.google.com/apis/maps/documentation/javascript/reference.html#MapOptions for the option names
+
+    vMap = [[ZZMapView alloc] initWithFrame:CGRectMakeZero()
+        delegate:self
+        center:{latitude:0.1, longitude:0.1},
+        zoom:15,
+        {mapTypeId:ZZMapTypeRoadMap},
+        {streetViewControl:true},
+        nil];
+
+or
+
+vMap = [[ZZMapView alloc] initWithFrame:CGRectMakeZero(),
+        {
+        zoom:4,
+        draggable:true,
+        mapTypeId:ZZMapTypeRoadMap,
+        streetViewControl:true
+        },
+        nil];
+
+and
+
+        var mapMarker = [[ZZMarker alloc] initAtLocation:loc onMap:vMap, {title:[aProject title], draggable:true}, nil];
+-------------------
+Architecture 00 Ltd.
+
+Released under the LGPL 2010
