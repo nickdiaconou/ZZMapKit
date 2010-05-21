@@ -1,0 +1,6 @@
+This is a very simple Google Maps v3 wrapper for Cappuccino (http://www.cappuccino.org).
+
+It is a CPView subclass. 
+
+Some code comes from http://github.com/280north/mapkit
+ 
