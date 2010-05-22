@@ -1,7 +1,7 @@
 // ZZMapView.j
 //
 // Created by Stephen Ierodiaconou,
-// Copyright (c) 2010, Architecture 00 Ltd.
+// Copyright (c) 2010, Architecture 00 Ltd. 
 // Portions Francisco Tolmasky, Copyright (c) 2010 280 North, Inc.
 //
 // Permission is hereby granted, free of charge, to any person
@@ -38,15 +38,17 @@ ZZMapTypeTerrain    = 3;
     {latitude: a, longitude: b}
 */
 
+var markerBeingDragged = null;
+
 @implementation ZZMapView : CPView
 {
     id                      delegate            @accessors;
 
     DOMElement              DOMMapElement;
     Object                  map                 @accessors;
-
+    
     MapOptions              mapOptions;
-
+    
     MapPoint                centerPoint         @accessors;
 }
 
@@ -54,7 +56,7 @@ ZZMapTypeTerrain    = 3;
 {
     if (self = [super initWithFrame:frame])
     {
-        delegate = self;
+        delegate = nil;
         centerPoint = {latitude:51.565828,longitude:-0.100034};
         mapOptions = {};
         mapOptions.zoom = 15;
@@ -79,7 +81,7 @@ ZZMapTypeTerrain    = 3;
     {
         delegate = d;
         centerPoint = center;
-
+        
         mapOptions = {};
         mapOptions.zoom = zoom;
 
@@ -142,29 +144,41 @@ ZZMapTypeTerrain    = 3;
                 default:
                     mapOptions.mapTypeId = google.maps.MapTypeId.HYBRID;
             }
-        }
+        } 
         else
             mapOptions.mapTypeId = google.maps.MapTypeId.HYBRID;
 
         mapOptions.center = new google.maps.LatLng(centerPoint.latitude, centerPoint.longitude);
-
+        
         map = new google.maps.Map(DOMMapElement, mapOptions);
-
+        
         //map.setCenter(new google.maps.LatLng(centerPoint.latitude, centerPoint.longitude));
-
+        
         style.left = "0px";
         style.top = "0px";
-
+        
         google.maps.event.trigger(map, 'resize');
+        
+        // Work around for Cappuccino messing with DOM drag and confusing maps
+        google.maps.event.addListener(map, 'mousemove', function(mouseevent) {
+            if (markerBeingDragged)
+            {
+                var pos = mouseevent.latLng;
+                pos = new google.maps.LatLng(pos.lat() - markerBeingDragged.diffposition.lat(), pos.lng() - markerBeingDragged.diffposition.lng());
+                markerBeingDragged.marker.setPosition(pos);
+            }
+            [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
+        });
+        // end work around
 
         // Important: we had to remove this dom element before appending it somewhere else
         // or you will get WRONG_DOCUMENT_ERRs (4)
         document.body.removeChild(DOMMapElement);
 
         _DOMElement.appendChild(DOMMapElement);
-
+        
         [self mapIsReady];
-
+        
     });
 }
 
@@ -187,8 +201,6 @@ ZZMapTypeTerrain    = 3;
 
 - (void)mapIsReady
 {
-    console.log('the map is ready');
-
     if (delegate)
         [delegate mapIsReady:self];
 }
@@ -214,7 +226,7 @@ var performWhenGoogleMapsScriptLoaded = function(/*Function*/ aFunction)
     else
     {
         var DOMScriptElement = document.createElement("script");
-
+        
         DOMScriptElement.src = "http://maps.google.com/maps/api/js?sensor=false&callback=_MKMapViewMapsLoaded";
         DOMScriptElement.type = "text/javascript";
 
@@ -263,31 +275,46 @@ function _MKMapViewMapsLoaded()
 
 @end
 
-
-// Map Marker icon
-@implementation ZZMarkerImage : CPObject
-{
-    MarkerImage     image    @accessors;
-    MarkerImage     shadow  @accessors;
-    JSObject        shape   @accessors;
-}
-
-@end
-
 // Map Marker
 @implementation ZZMarker : CPObject
 {
+    ZZMapView       map;
+    
     Marker          marker      @accessors(readonly);
-    ZZMarkerImage   icon        @accessors;
 
     MarkerOptions   markerOptions;
     InfoWindow      infoWindow;
+}
+
++ (id)imageFromURL:url, ...
+{
+    var argLength = arguments.length,
+        i = 2,
+        options = {};
+    for (; i < argLength && ((argument = arguments[i]) !== nil); ++i)
+    {
+        for (property in argument)
+        {
+            options[''+property] = argument[''+property];
+        }
+    }
+    size = (options.size)?(options.size):(null);
+    origin = (options.origin)?(options.origin):(null);
+    anchor = (options.anchor)?(options.anchor):(null);
+    scaledSize = (options.scaledSize)?(options.scaledSize):(null);
+    return new google.maps.MarkerImage(url, size, origin, anchor, scaledSize);
+}
+
++ (id)markerShapeWithType:(CPString)type andCoordinates:(CPArray)coords
+{
+    return {type:type, coord:coords};
 }
 
 - (id)initAtLocation:loc onMap:vMap, ...
 {
     if (self = [super init])
     {
+        map = vMap;
         markerOptions = {};
         markerOptions.map = [vMap map];
         markerOptions.position = new google.maps.LatLng(loc.latitude, loc.longitude);
@@ -301,27 +328,38 @@ function _MKMapViewMapsLoaded()
             }
         }
 
-        if (icon)
-        {
-            markerOptions.icon = [icon image];
-            markerOptions.shadow = [icon shadow];
-            markerOptions.shape = [icon shape];
-        }
         marker = new google.maps.Marker( markerOptions );
     }
     return self;
 }
 
-- (void)setInfoWindowContent:(CPString)html
+// Work around for Cappuccino messing with DOM drag and confusing maps
+- (void)setDraggable:draggable
 {
-    infoWindow = new google.maps.InfoWindow({
-        content: html
-    });
-
-    google.maps.event.addListener(marker, 'click', function() {
-        infoWindow.open(marker.getMap(),marker);
-    });
+    if (draggable)
+    {
+        google.maps.event.addListener(marker, 'mousedown', function(event) {
+           var mouseposition = ZZMapConvertDivPixelsToLatLng(marker.getMap(),new google.maps.Point( event.x - [[map superview] frame].origin.x, event.y - [[map superview] frame].origin.y)),
+                anchorposition = marker.getPosition();
+                
+            markerBeingDragged = {
+                marker:marker, 
+                diffposition:new google.maps.LatLng(mouseposition.lat() - anchorposition.lat(), mouseposition.lng() - anchorposition.lng())
+            };
+            [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
+        });
+        google.maps.event.addListener(marker, 'mouseup', function(event) {
+            markerBeingDragged = null;
+            [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
+        });
+    }
+    else
+    {
+        google.maps.event.addListener(marker, 'mousedown', null);
+        google.maps.event.addListener(marker, 'mouseup', null);
+    }
 }
+// End work around
 
 - (void)setVisible:vis
 {
@@ -338,3 +376,37 @@ function _MKMapViewMapsLoaded()
 }
 
 @end
+
+//http://stackoverflow.com/questions/2674392/how-to-access-google-maps-api-v3-markers-div-and-its-pixel-position
+function ZZMapConvertLatLngToDivPixels(map, latLng)
+{
+    var scale = Math.pow(2, map.getZoom()),
+        nw = new google.maps.LatLng(
+            map.getBounds().getNorthEast().lat(),
+            map.getBounds().getSouthWest().lng()
+        ),
+        worldCoordinateNW = map.getProjection().fromLatLngToPoint(nw),
+        worldCoordinate = map.getProjection().fromLatLngToPoint(latLng);
+        
+    return new google.maps.Point(
+        Math.floor((worldCoordinate.x - worldCoordinateNW.x) * scale),
+        Math.floor((worldCoordinate.y - worldCoordinateNW.y) * scale)
+    );
+}
+
+function ZZMapConvertDivPixelsToLatLng(map, point)
+{
+	var scale = Math.pow(2, map.getZoom()),
+		x = point.x / scale,
+		y = point.y / scale,
+		nw = new google.maps.LatLng(
+            map.getBounds().getNorthEast().lat(),
+            map.getBounds().getSouthWest().lng()
+        ),
+        worldCoordinateNW = map.getProjection().fromLatLngToPoint(nw);
+		
+	var wcx = x + worldCoordinateNW.x,
+		wcy = y + worldCoordinateNW.y;
+	
+	return map.getProjection().fromPointToLatLng(new google.maps.Point(wcx, wcy));
+}

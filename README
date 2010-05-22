@@ -20,7 +20,7 @@ See http://code.google.com/apis/maps/documentation/javascript/reference.html#Map
 
 or
 
-vMap = [[ZZMapView alloc] initWithFrame:CGRectMakeZero(),
+    vMap = [[ZZMapView alloc] initWithFrame:CGRectMakeZero(),
         {
         zoom:4,
         draggable:true,
